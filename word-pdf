@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Word to PDF Converter</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.16.0/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.0/mammoth.browser.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+        #dropZone { border: 2px dashed #ccc; padding: 30px; text-align: center; margin: 20px 0; }
+        #fileInput { display: none; }
+        button { background: #4CAF50; color: white; border: none; padding: 10px 20px; cursor: pointer; }
+        #status { margin: 20px 0; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Word to PDF Converter</h1>
+    <div id="dropZone">
+        <p>Drag & drop Word file here or</p>
+        <input type="file" id="fileInput" accept=".docx,.doc">
+        <button onclick="document.getElementById('fileInput').click()">Select File</button>
+    </div>
+    <div id="status"></div>
+    <button id="convertBtn" disabled>Convert to PDF</button>
+    <a id="downloadLink" href="#" download style="display:none;">Download PDF</a>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const convertBtn = document.getElementById('convertBtn');
+        const statusDiv = document.getElementById('status');
+        const downloadLink = document.getElementById('downloadLink');
+        
+        let selectedFile = null;
+
+        // Drag and drop handlers
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(event => {
+            dropZone.addEventListener(event, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(event => {
+            dropZone.addEventListener(event, () => dropZone.style.borderColor = '#4CAF50', false);
+        });
+
+        ['dragleave', 'drop'].forEach(event => {
+            dropZone.addEventListener(event, () => dropZone.style.borderColor = '#ccc', false);
+        });
+
+        dropZone.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            const file = e.dataTransfer.files[0];
+            handleFile(file);
+        }
+
+        fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
+
+        function handleFile(file) {
+            if (!file) return;
+            
+            const validTypes = ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
+                              'application/msword'];
+            if (!validTypes.includes(file.type) && !file.name.match(/\.(docx|doc)$/)) {
+                statusDiv.textContent = 'Please select a Word document (.docx or .doc)';
+                return;
+            }
+            
+            selectedFile = file;
+            convertBtn.disabled = false;
+            statusDiv.textContent = `Selected: ${file.name}`;
+            downloadLink.style.display = 'none';
+        }
+
+        convertBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+            
+            convertBtn.disabled = true;
+            statusDiv.textContent = 'Converting...';
+            
+            try {
+                const arrayBuffer = await readFileAsArrayBuffer(selectedFile);
+                const result = await mammoth.extractRawText({ arrayBuffer });
+                
+                // Create a simple PDF (note: this won't preserve complex formatting)
+                const { PDFDocument, rgb } = PDFLib;
+                const pdfDoc = await PDFDocument.create();
+                const page = pdfDoc.addPage([600, 800]);
+                
+                const text = result.value;
+                const lines = text.split('\n');
+                let y = 750;
+                
+                lines.forEach(line => {
+                    if (line.trim()) {
+                        page.drawText(line, { x: 50, y, size: 12, color: rgb(0, 0, 0) });
+                        y -= 20;
+                    }
+                });
+                
+                const pdfBytes = await pdfDoc.save();
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+                
+                downloadLink.href = url;
+                downloadLink.download = selectedFile.name.replace(/\.\w+$/, '.pdf');
+                downloadLink.style.display = 'inline-block';
+                statusDiv.textContent = 'Conversion complete!';
+                
+            } catch (error) {
+                statusDiv.textContent = 'Error: ' + error.message;
+            } finally {
+                convertBtn.disabled = false;
+            }
+        });
+
+        function readFileAsArrayBuffer(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+            });
+        }
+    </script>
+</body>
+</html>
