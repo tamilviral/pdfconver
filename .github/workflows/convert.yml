@@ -1,0 +1,39 @@
+name: PDF to Word Conversion
+
+on:
+  workflow_dispatch:
+    inputs:
+      pdf_url:
+        description: 'URL of the PDF file to convert'
+        required: true
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+      
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.9'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pdf2docx requests
+        
+    - name: Download PDF
+      run: |
+        wget ${{ github.event.inputs.pdf_url }} -O input.pdf
+        
+    - name: Convert PDF to Word
+      run: |
+        python convert.py input.pdf output.docx
+        
+    - name: Upload Word document
+      uses: actions/upload-artifact@v2
+      with:
+        name: converted-word-document
+        path: output.docx
